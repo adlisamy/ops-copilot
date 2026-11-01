@@ -5,6 +5,8 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 import reactor.core.publisher.Flux;
 
 /**
@@ -129,7 +131,7 @@ public class ChatAssistant {
                 .system(SYSTEM_PROMPT)
                 .user(userMessage)
                 .call()
-                .entity(AssistantResult.class, spec -> spec.validateSchema());
+                .entity(AssistantResult.class, ChatClient.EntityParamSpec::validateSchema);
     }
 
     /**
@@ -167,7 +169,7 @@ public class ChatAssistant {
                 .user(userMessage)
                 .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
                 .call()
-                .entity(AssistantResult.class, spec -> spec.validateSchema());
+                .entity(AssistantResult.class, ChatClient.EntityParamSpec::validateSchema);
     }
 
     /**

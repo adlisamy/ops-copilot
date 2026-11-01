@@ -82,6 +82,12 @@ public class OllamaConfiguration {
      * from {@link AiProperties}. Unlike cloud providers, Ollama typically doesn't need
      * an API key since it runs locally.</p>
      *
+     * <p><b>Thinking mode:</b> Production-level models (qwen3.5:4b and larger) support
+     * chain-of-thought reasoning, where the model generates internal reasoning steps before
+     * producing the final answer. This improves response quality for complex questions.
+     * Thinking is enabled by default here. For faster development iterations with smaller
+     * models, you can add {@code .disableThinking()} to skip the reasoning step.</p>
+     *
      * <h3>Builder structure explained:</h3>
      * <pre>
      * OllamaChatModel.builder()                    // Start building the ChatModel
@@ -114,6 +120,7 @@ public class OllamaConfiguration {
         return OllamaChatModel.builder()
                 .options(OllamaChatOptions.builder()
                         .model(properties.ollama().model())
+                        .disableThinking()
                         .build())
                 .ollamaApi(OllamaApi.builder()
                         .baseUrl(properties.ollama().baseUrl())
