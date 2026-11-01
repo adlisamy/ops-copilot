@@ -42,6 +42,73 @@ When the application is running locally:
 | OpenAPI JSON | `http://localhost:8080/v3/api-docs` |
 | Swagger UI | `http://localhost:8080/swagger-ui/index.html` |
 
+## API Examples
+
+### Simple chat (no memory)
+
+Sends a single question and receives a structured JSON response. Each request is independent — the AI has no memory of previous messages.
+
+```bash
+curl -X POST http://localhost:18080/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "How do I check disk usage on Linux?"}'
+```
+
+**Response:**
+```json
+{
+  "reply": "Run 'df -h' to check disk usage in human-readable format...",
+  "suggestions": [
+    "How do I clean up disk space?",
+    "What does 'df -h' output mean?"
+  ]
+}
+```
+
+### Chat with conversation memory
+
+Pass a `conversationId` to maintain context across multiple turns. Use the same ID to continue the conversation.
+
+```bash
+# First message — starts a new conversation
+curl -X POST http://localhost:18080/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "My server is running slow", "conversationId": "conv-1"}'
+
+# Follow-up — continues the same conversation
+curl -X POST http://localhost:18080/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -d '{"message": "What should I check first?", "conversationId": "conv-1"}'
+```
+
+The AI will remember the context from the first message when answering the follow-up.
+
+### Streaming response
+
+Receive the response token-by-token in real time using Server-Sent Events (SSE). Use `-N` to disable curl's buffering so you see output as it arrives.
+
+```bash
+curl -N http://localhost:18080/api/v1/chat/stream?message="Explain%20Docker%20containers"
+```
+
+Output appears word-by-word as the LLM generates it:
+
+```
+data: Docker
+data:  containers
+data:  are
+data:  lightweight
+data: ...
+```
+
+### Status endpoint
+
+Quickly verify the API is running:
+
+```bash
+curl http://localhost:18080/api/v1/status
+```
+
 ## Validate
 
 ```bash
