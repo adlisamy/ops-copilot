@@ -4,17 +4,16 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
+import java.io.IOException;
+import java.sql.SQLException;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.PriorityQueue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.ReentrantLock;
+
 // Enables component scanning, auto-configuration, and Java-based configuration for this application.
-@SpringBootApplication(excludeName = {
-        "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioSpeechAutoConfiguration",
-        "org.springframework.ai.model.openai.autoconfigure.OpenAiAudioTranscriptionAutoConfiguration",
-        "org.springframework.ai.model.openai.autoconfigure.OpenAiChatAutoConfiguration",
-        "org.springframework.ai.model.openai.autoconfigure.OpenAiEmbeddingAutoConfiguration",
-        "org.springframework.ai.model.openai.autoconfigure.OpenAiImageAutoConfiguration",
-        "org.springframework.ai.model.openai.autoconfigure.OpenAiModerationAutoConfiguration",
-        "org.springframework.ai.model.anthropic.autoconfigure.AnthropicChatAutoConfiguration",
-        "org.springframework.ai.model.ollama.autoconfigure.OllamaChatAutoConfiguration"
-})
+@SpringBootApplication
 @ConfigurationPropertiesScan
 public class OpsCopilotApplication {
 

@@ -5,6 +5,8 @@ import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.model.chat.client.autoconfigure.ChatClientBuilderConfigurer;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
@@ -122,8 +124,10 @@ public class ChatClientConfiguration {
      */
     @Bean
     @Primary
-    ChatClient chatClient(ChatModel chatModel) {
-        return ChatClient.builder(chatModel).build();
+    ChatClient chatClient(ChatModel chatModel, ChatClientBuilderConfigurer chatClientBuilderConfigurer) {
+        return chatClientBuilderConfigurer.configure(ChatClient
+                .builder(chatModel)
+        ).build();
     }
 
     /**
@@ -142,19 +146,22 @@ public class ChatClientConfiguration {
      *       in memory for future turns</li>
      * </ol>
      *
-     * <p>By separating this from the default {@link #chatClient(ChatModel)}, we avoid the
+     * <p>By separating this from the default {@link #chatClient(ChatModel,ChatClientBuilderConfigurer)}, we avoid the
      * common pitfall where stateless requests fail because no conversationId is provided.</p>
      *
-     * @param chatModel  the LLM provider bean
+     * @param chatModel  the LLM provider be
+     * @param chatClientBuilderConfigurer ChatClientBuilderConfigurer.configure(builder) applies all registered ChatClientBuilderCustomizer beans and wires the same observability behavior normally provided by Spring AI auto-configuration.
      * @param chatMemory the conversation history storage bean
      * @return a ChatClient with memory advisor enabled for conversational requests
      */
     @Bean
-    ChatClient chatClientWithMemory(ChatModel chatModel, ChatMemory chatMemory) {
-        return ChatClient.builder(chatModel)
+    @Qualifier("chatClientWithMemory")
+    ChatClient chatClientWithMemory(ChatModel chatModel, ChatClientBuilderConfigurer chatClientBuilderConfigurer, ChatMemory chatMemory) {
+        return chatClientBuilderConfigurer.configure(
+                ChatClient.builder(chatModel)
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(chatMemory).build()
-                )
-                .build();
+                    )
+                ).build();
     }
 }
