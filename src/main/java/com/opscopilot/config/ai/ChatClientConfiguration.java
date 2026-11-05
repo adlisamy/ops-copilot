@@ -6,6 +6,8 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.model.chat.client.autoconfigure.ChatClientBuilderConfigurer;
+import org.springframework.ai.tool.ToolCallbackProvider;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -102,7 +104,32 @@ public class ChatClientConfiguration {
                 .maxMessages(20)
                 .build();
     }
-
+    /**
+     * Create the ToolCallbackProvider bean — registers callable tools for the LLM.
+     *
+     * <p>{@code MethodToolCallbackProvider} exposes Java methods as tools that the LLM can
+     * invoke during a conversation. This enables function calling, where the model can
+     * request the application to perform actions (fetch data, run commands, etc.) and
+     * use the results to formulate its response.</p>
+     *
+     * <h3>How tool calling works:</h3>
+     * <ol>
+     *   <li>The LLM detects that a tool should be called based on the prompt or system instructions</li>
+     *   <li>Spring AI invokes the corresponding Java method with the arguments provided by the model</li>
+     *   <li>The method's return value is fed back to the LLM as context for the final response</li>
+     * </ol>
+     *
+     * <p>This provider is registered on both {@link #chatClient(ChatModel, ChatClientBuilderConfigurer, ToolCallbackProvider)}
+     * and {@link #chatClientWithMemory(ChatModel, ChatClientBuilderConfigurer, ChatMemory, ToolCallbackProvider)} so that
+     * tools are available for both stateless and conversational requests.</p>
+     *
+     * @return a ToolCallbackProvider instance (currently empty — add tool methods via {@code toolObjects()})
+     */
+    @Bean
+    public ToolCallbackProvider tools() {
+        return MethodToolCallbackProvider.builder()
+                .build();
+    }
     /**
      * Create the default ChatClient bean — a basic client with NO memory advisor.
      *
@@ -124,9 +151,12 @@ public class ChatClientConfiguration {
      */
     @Bean
     @Primary
-    ChatClient chatClient(ChatModel chatModel, ChatClientBuilderConfigurer chatClientBuilderConfigurer) {
+    ChatClient chatClient(ChatModel chatModel,
+                          ChatClientBuilderConfigurer chatClientBuilderConfigurer,
+                          ToolCallbackProvider mcpTools) {
         return chatClientBuilderConfigurer.configure(ChatClient
                 .builder(chatModel)
+                .defaultTools(mcpTools)
         ).build();
     }
 
@@ -156,12 +186,17 @@ public class ChatClientConfiguration {
      */
     @Bean
     @Qualifier("chatClientWithMemory")
-    ChatClient chatClientWithMemory(ChatModel chatModel, ChatClientBuilderConfigurer chatClientBuilderConfigurer, ChatMemory chatMemory) {
+    ChatClient chatClientWithMemory(ChatModel chatModel,
+                                    ChatClientBuilderConfigurer chatClientBuilderConfigurer,
+                                    ChatMemory chatMemory,
+                                    ToolCallbackProvider mcpTools) {
         return chatClientBuilderConfigurer.configure(
                 ChatClient.builder(chatModel)
+                        .defaultTools(mcpTools)
                 .defaultAdvisors(
                         MessageChatMemoryAdvisor.builder(chatMemory).build()
                     )
+
                 ).build();
     }
 }

@@ -27,8 +27,10 @@ dependencies {
 	// ─────────────────────────────────────────────────────────────
 	// Spring AI – LLM integration (Week 1)
 	// ─────────────────────────────────────────────────────────────
-	implementation(platform("org.springframework.ai:spring-ai-bom:2.0.0"))
+	implementation(platform("org.springframework.ai:spring-ai-bom:2.0.1"))
 	implementation("org.springframework.ai:spring-ai-starter-model-openai")
+	implementation("org.springframework.ai:spring-ai-starter-mcp-server-webmvc")
+
 	//Support multi-providers
     implementation("org.springframework.ai:spring-ai-starter-model-anthropic")
     implementation("org.springframework.ai:spring-ai-starter-model-ollama")
@@ -38,6 +40,8 @@ dependencies {
 	testImplementation("org.springframework.ai:spring-ai-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-test")
 	testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
+	testImplementation ("org.springframework.ai:spring-ai-spring-boot-testcontainers")
+
 	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
