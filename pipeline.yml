@@ -1,0 +1,53 @@
+
+name: Ops Copilot gradle pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+      name: Build gradle application
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout code
+          uses: actions/checkout@v6
+          with:
+            fetch-depth: 0
+        - name: Setup JDK
+          uses: actions/setup-java@v5
+          with:
+            distribution: 'temurin'
+            java-version: 21
+        # Configure Gradle for optimal use in GitHub Actions, including caching of downloaded dependencies.
+        # See: https://github.com/gradle/actions/blob/main/setup-gradle/README.md
+        - name: Setup Gradle
+          uses: gradle/actions/setup-gradle@6
+
+        - name: Build gradle application
+          run: ./gradlew build
+
+        - name: Test gradle application
+          run: ./gradlew test
+
+        #- name: Publish gradle application
+        #  run: ./gradlew publish
+
+
+  dependency-submission:
+    dependency-submission:
+      runs-on: ubuntu-22.04
+      steps:
+        - name: Checkout sources
+          uses: actions/checkout@v6
+        - name: Setup Java
+          uses: actions/setup-java@v5
+          with:
+            distribution: 'temurin'
+            java-version: 21
+        - name: Generate and submit dependency graph
+          uses: gradle/actions/dependency-submission@v6
