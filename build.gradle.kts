@@ -34,7 +34,12 @@ dependencies {
 	//Support multi-providers
     implementation("org.springframework.ai:spring-ai-starter-model-anthropic")
     implementation("org.springframework.ai:spring-ai-starter-model-ollama")
+	//implementation("org.springframework.ai:spring-ai-starter-model-google-genai-embedding")
 
+	//Support RAG
+	implementation("org.springframework.ai:spring-ai-vector-store-advisor")
+	implementation("org.springframework.ai:spring-ai-rag")
+	implementation("org.springframework.ai:spring-ai-starter-vector-store-pgvector")
 
 
 	testImplementation("org.springframework.ai:spring-ai-test")

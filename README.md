@@ -4,7 +4,7 @@ Ops Copilot is a learning project for building a safe, production-minded AI assi
 
 ## Current status
 
-**Week 0 — API foundation.** The repository exposes a minimal status endpoint, Actuator health endpoint, OpenAPI document, and Swagger UI. No LLM, vector database, external operational integration, or automatic infrastructure action is implemented.
+**LLM and RAG foundation.** The API supports configurable chat providers, optional conversation memory, and an explicit knowledge-base chat route backed by Spring AI's `VectorStore` abstraction and pgvector. Runbook loading is intentionally separate from chat requests; no operational-system integration or automatic infrastructure action is implemented.
 
 ## Module layout
 
@@ -24,12 +24,19 @@ src/main/java/com/opscopilot/
 - [Project documentation](docs/README.md)
 - [Architecture notes](docs/architecture/README.md)
 - [Runbook guidance](docs/runbooks/README.md)
+- [RAG setup and learnings](docs/rag-setup-and-learnings.md)
 
 ## Run locally
 
-Requirements: a Java 25-compatible JDK available to Gradle.
+Requirements: a Java 25-compatible JDK available to Gradle, PostgreSQL with pgvector at
+`localhost:5431` with an `ops_vector_db` database, and Ollama at `localhost:11434` with the
+configured chat and embedding models available. The dev profile uses Ollama for chat and
+embeddings; see [Retrieval-augmented chat](#retrieval-augmented-chat).
 
 ```bash
+export OPS_COPILOT_DB_PASSWORD='your-local-database-password'
+ollama pull llama3
+ollama pull nomic-embed-text
 ./gradlew bootRun
 ```
 
@@ -37,10 +44,54 @@ When the application is running locally:
 
 | Resource | Local URL |
 | --- | --- |
-| API status | `http://localhost:8080/api/v1/status` |
-| Health | `http://localhost:8080/actuator/health` |
-| OpenAPI JSON | `http://localhost:8080/v3/api-docs` |
-| Swagger UI | `http://localhost:8080/swagger-ui/index.html` |
+| API status | `http://localhost:18080/api/v1/status` |
+| Health | `http://localhost:18080/actuator/health` |
+| OpenAPI JSON | `http://localhost:18080/v3/api-docs` |
+| Swagger UI | `http://localhost:18080/swagger-ui/index.html` |
+
+## Retrieval-augmented chat
+
+The `dev` profile uses PostgreSQL/pgvector for document vectors, Ollama's `llama3` model for chat,
+and `nomic-embed-text` for embeddings. Start PostgreSQL with pgvector support and a database named
+`ops_vector_db`, and ensure both Ollama models are available as shown above.
+
+The `nomic-embed-text` output is configured to 768 dimensions, matching
+`spring.ai.vectorstore.pgvector.dimensions` in `application-dev.properties`. The same embedding
+model must be used for ingestion and search. Spring AI's pgvector starter creates the configured
+`ops` schema and vector table at startup when schema initialization is enabled. Vectors from a
+different embedding model are not compatible, even when their dimensions match; replace and
+re-ingest stored documents when changing embedding models.
+
+To load the curated runbooks from `docs/runbooks/` into pgvector, start the application with the
+one-time startup ingestion option:
+
+```bash
+./gradlew bootRun --args='--app.knowledge-base.ingest-docs-on-startup=true'
+```
+
+The dev-only loader recursively reads `.md` files from `docs/runbooks/`, attaches their relative
+paths as `source` metadata, splits the documents, and stores the chunks through
+`KnowledgeBaseIngestionService` and the `VectorStore` abstraction. The option is off by default.
+Ingestion is add-only, so don't repeat it until duplicate/replacement handling is implemented;
+rerunning can add duplicate chunks.
+
+To verify real retrieval against the configured PostgreSQL and Ollama services, run:
+
+```bash
+RAG_INTEGRATION_TESTS=true ./gradlew test --tests '*KnowledgeBaseRetrievalIntegrationTest'
+```
+
+The test embeds the runbooks, searches for CrashLoopBackOff troubleshooting information, and asserts
+that a matching runbook chunk is returned. It uses the active dev database and leaves the ingested
+chunks there. After ingestion, send questions that should use the knowledge base to
+`POST /api/v1/chat/rag`. Supplying a `conversationId` enables memory in addition to retrieval; the
+ordinary `POST /api/v1/chat` route remains independent of the knowledge base.
+
+```bash
+curl -X POST http://localhost:18080/api/v1/chat/rag \
+  -H "Content-Type: application/json" \
+  -d '{"message": "How do I restart the service?"}'
+```
 
 ## API Examples
 
@@ -111,7 +162,9 @@ curl http://localhost:18080/api/v1/status
 
 ## Choosing a Model
 
-The application supports three AI providers. Edit `src/main/resources/application.properties` to switch between them.
+The application supports local and hosted AI providers. The checked-in configuration uses Ollama
+for chat and embeddings. Chat and embeddings are configured independently; the Gemini properties
+below and in `application-dev.properties` are commented reference settings.
 
 ### Option 1: Ollama (local, free, privacy-first)
 
@@ -138,9 +191,9 @@ ollama pull qwen3:0.6b
 # app.ai.ollama.model=qwen3:0.6b
 ```
 
-**Default:** `qwen3:0.6b` (fastest on CPU, ~35 tokens/second).
+**Configured chat model:** `llama3` in `application.properties`.
 
-### Option 2: OpenAI (cloud, requires API key)
+### Option 2: OpenAI-compatible provider (cloud, requires API key)
 
 **Best for:** production quality, reliable performance, no local hardware requirements.
 
@@ -149,10 +202,11 @@ ollama pull qwen3:0.6b
 **To enable:**
 
 1. Get an API key from [platform.openai.com](https://platform.openai.com/api-keys)
-2. Uncomment the OpenAI section in `application.properties`:
+2. Set the OpenAI-compatible provider properties in `application.properties`:
    ```properties
    app.ai.provider=openai
-   app.ai.openai.apiKey=${OPENAI_API_KEY:your-api-key-here}
+   app.ai.openai.base-url=https://api.openai.com/v1
+   app.ai.openai.api-key=${OPENAI_API_KEY}
    app.ai.openai.model=gpt-4o-mini
    ```
 3. Set the environment variable:
@@ -183,6 +237,25 @@ ollama pull qwen3:0.6b
    export ANTHROPIC_API_KEY=sk-ant-your-key-here
    ```
 4. Restart the application
+
+### Gemini API (optional reference; inactive by default)
+
+The successful end-to-end RAG check used Gemini for hosted chat and Google GenAI for embeddings.
+The example settings are commented out so the default setup remains local Ollama. For Gemini chat,
+uncomment the OpenAI-compatible properties in `application.properties`, set
+`app.ai.provider=openai`, and export a valid `GEMINI_API_KEY` outside the repository:
+
+```bash
+export GEMINI_API_KEY='your-api-key'
+./gradlew bootRun
+```
+
+For Gemini embeddings, add the Spring AI Google GenAI embedding starter and uncomment its settings
+in `application-dev.properties`; the example uses 768 dimensions. Changing embedding models
+requires replacing and re-ingesting stored vectors. Hosted requests depend on valid credentials,
+model availability, quotas, and provider service availability. See
+[RAG setup and learnings](docs/rag-setup-and-learnings.md) for what was verified and the observed
+failure modes.
 
 ### Comparison
 

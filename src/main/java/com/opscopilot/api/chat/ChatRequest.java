@@ -5,7 +5,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 /**
  * Request DTO (Data Transfer Object) for the chat endpoint.
  *
- * <p>This record defines the JSON structure that clients send to the POST /api/v1/chat endpoint.
+ * <p>This record defines the JSON structure sent to the chat and RAG endpoints.
  * Spring Boot automatically deserializes the JSON body into this object using Jackson.</p>
  *
  * <h3>JSON structure:</h3>
@@ -47,6 +47,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
  *
  * @see ChatResponse
  * @see ChatController#prompt(ChatRequest)
+ * @see ChatController#promptWithRag(ChatRequest)
  */
 @Schema(description = "Chat request containing the user's message")
 public record ChatRequest(

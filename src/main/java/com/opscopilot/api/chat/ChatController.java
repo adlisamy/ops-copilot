@@ -37,6 +37,11 @@ import java.util.List;
  *     <td>Send a message and receive a structured JSON response (with optional conversation memory)</td>
  *   </tr>
  *   <tr>
+ *     <td>POST</td>
+ *     <td>/api/v1/chat/rag</td>
+ *     <td>Answer with retrieved knowledge-base context (and optional conversation memory)</td>
+ *   </tr>
+ *   <tr>
  *     <td>GET</td>
  *     <td>/api/v1/chat/stream?message=...</td>
  *     <td>Stream a response token-by-token using Server-Sent Events (SSE)</td>
@@ -65,6 +70,11 @@ import java.util.List;
  *
  * # Streaming response
  * curl -N http://localhost:18080/api/v1/chat/stream?message="Explain%20Docker"
+ *
+ * # Knowledge-base response (documents must be ingested separately)
+ * curl -X POST http://localhost:18080/api/v1/chat/rag \
+ *   -H "Content-Type: application/json" \
+ *   -d '{"message": "How do I restart the service?"}'
  * </pre>
  *
  * <h3>Key Spring annotations used:</h3>
@@ -141,6 +151,31 @@ public class ChatController {
         } else {
             result = chatAssistant.ask(request.message());
         }
+        return toResponse(result);
+    }
+
+    /**
+     * Answer using relevant knowledge-base documents retrieved from the vector store.
+     *
+     * <p>Supplying a conversation ID enables both retrieval and conversation memory; omitting
+     * it keeps the request stateless. Documents must be ingested separately.</p>
+     *
+     * @param request the user's message and optional conversation ID
+     * @return the AI response with follow-up suggestions
+     */
+    @Operation(summary = "Answer with relevant knowledge-base context")
+    @PostMapping(path = "/rag", consumes = MediaType.APPLICATION_JSON_VALUE, produces = MediaType.APPLICATION_JSON_VALUE)
+    public ChatResponse promptWithRag(@RequestBody ChatRequest request) {
+        AssistantResult result;
+        if (request.conversationId() != null && !request.conversationId().isBlank()) {
+            result = chatAssistant.askWithMemoryAndRag(request.message(), request.conversationId());
+        } else {
+            result = chatAssistant.askWithRag(request.message());
+        }
+        return toResponse(result);
+    }
+
+    private static ChatResponse toResponse(AssistantResult result) {
         return new ChatResponse(result.reply(), result.suggestions() != null ? result.suggestions() : List.of());
     }
 

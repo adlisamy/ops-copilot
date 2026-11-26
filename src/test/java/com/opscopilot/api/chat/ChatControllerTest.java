@@ -13,6 +13,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -78,6 +79,34 @@ public class ChatControllerTest {
 				.content("{\"message\":\"What is my name?\",\"conversationId\":\"conv-123\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.reply").value("I remember your name!"));
+	}
+
+	@Test
+	void shouldUseKnowledgeBaseForRagRequest() throws Exception {
+		AssistantResult mockResult = new AssistantResult("Found the runbook answer.", List.of(), "technical");
+		when(chatAssistant.askWithRag(anyString())).thenReturn(mockResult);
+
+		mockMvc.perform(post("/api/v1/chat/rag")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"message\":\"How do I restart the service?\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.reply").value("Found the runbook answer."));
+
+		verify(chatAssistant).askWithRag("How do I restart the service?");
+	}
+
+	@Test
+	void shouldCombineMemoryAndKnowledgeBaseForRagConversation() throws Exception {
+		AssistantResult mockResult = new AssistantResult("Found the runbook answer.", List.of(), "technical");
+		when(chatAssistant.askWithMemoryAndRag(anyString(), anyString())).thenReturn(mockResult);
+
+		mockMvc.perform(post("/api/v1/chat/rag")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("{\"message\":\"How do I restart it?\",\"conversationId\":\"conv-rag\"}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.reply").value("Found the runbook answer."));
+
+		verify(chatAssistant).askWithMemoryAndRag("How do I restart it?", "conv-rag");
 	}
 
 }

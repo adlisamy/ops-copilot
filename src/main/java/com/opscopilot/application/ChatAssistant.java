@@ -13,13 +13,15 @@ import reactor.core.publisher.Flux;
  * Core application service that handles all interactions with the AI language model.
  *
  * <p>This class is the bridge between the REST API layer (controllers) and the
- * underlying LLM (Large Language Model) provided by Spring AI. It demonstrates
- * three common patterns for calling an LLM:</p>
+ * Spring AI chat clients. It demonstrates plain chat, chat with memory, and
+ * retrieval-augmented chat, with memory optional on the retrieval path.</p>
  *
  * <ol>
  *   <li><b>Simple one-shot call</b> — send a message and get a structured result back.</li>
  *   <li><b>Conversational call with memory</b> — maintain context across multiple turns
  *       so the AI "remembers" earlier messages in the same conversation.</li>
+ *   <li><b>Retrieval-augmented call</b> — retrieve relevant knowledge-base chunks and add them
+ *       to the prompt before generation.</li>
  *   <li><b>Streaming call</b> — receive the response token-by-token in real time,
  *       useful for showing a "typing" effect to the user.</li>
  * </ol>
@@ -86,21 +88,32 @@ public class ChatAssistant {
      */
     private final ChatClient chatClientWithMemory;
 
+    /** A stateless client that retrieves relevant knowledge-base context before generation. */
+    private final ChatClient chatClientWithRag;
+
+    /** A client that combines conversation history with knowledge-base retrieval. */
+    private final ChatClient chatClientWithMemoryAndRag;
+
     /**
-     * Constructor-injection of both ChatClient beans.
+     * Constructor-injection of the distinct ChatClient use cases.
      *
-     * <p>Spring automatically provides both ChatClient instances when creating this service.
+     * <p>Spring automatically provides all ChatClient instances when creating this service.
      * The {@code @Primary} annotation on the basic client ensures it is injected into
-     * the first parameter, while the {@code @Qualifier} annotation identifies the
-     * memory-enabled client for the second parameter.</p>
+     * the first parameter, while {@code @Qualifier} selects the memory and RAG combinations.</p>
      *
      * @param chatClient the basic ChatClient without memory, for stateless requests
      * @param chatClientWithMemory the ChatClient with memory advisor, for conversational requests
+     * @param chatClientWithRag the ChatClient with retrieval and without memory
+     * @param chatClientWithMemoryAndRag the ChatClient with both retrieval and memory
      */
     public ChatAssistant(ChatClient chatClient,
-                         @Qualifier("chatClientWithMemory") ChatClient chatClientWithMemory) {
+                         @Qualifier("chatClientWithMemory") ChatClient chatClientWithMemory,
+                         @Qualifier("chatClientWithRag") ChatClient chatClientWithRag,
+                         @Qualifier("chatClientWithMemoryAndRag") ChatClient chatClientWithMemoryAndRag) {
         this.chatClient = chatClient;
         this.chatClientWithMemory = chatClientWithMemory;
+        this.chatClientWithRag = chatClientWithRag;
+        this.chatClientWithMemoryAndRag = chatClientWithMemoryAndRag;
     }
 
     /**
@@ -165,6 +178,41 @@ public class ChatAssistant {
      */
     public AssistantResult askWithMemory(String userMessage, String conversationId) {
         return chatClientWithMemory.prompt()
+                .system(SYSTEM_PROMPT)
+                .user(userMessage)
+                .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .call()
+                .entity(AssistantResult.class, ChatClient.EntityParamSpec::validateSchema);
+    }
+
+    /**
+     * Send a question with relevant knowledge-base context and no conversation history.
+     *
+     * <p>The retrieval advisor embeds the question with the configured embedding model,
+     * searches the {@link org.springframework.ai.vectorstore.VectorStore}, and adds the
+     * matching document chunks to the prompt. This does not write documents to the store;
+     * ingestion is handled separately by {@link KnowledgeBaseIngestionService}.</p>
+     *
+     * @param userMessage the user's question or request
+     * @return a structured {@link AssistantResult} grounded with retrieved context when available
+     */
+    public AssistantResult askWithRag(String userMessage) {
+        return chatClientWithRag.prompt()
+                .system(SYSTEM_PROMPT)
+                .user(userMessage)
+                .call()
+                .entity(AssistantResult.class, ChatClient.EntityParamSpec::validateSchema);
+    }
+
+    /**
+     * Send a question with both knowledge-base retrieval and conversation history.
+     *
+     * @param userMessage the user's current message
+     * @param conversationId the ID used to retrieve and update conversation history
+     * @return a structured {@link AssistantResult} with retrieved context and conversation history
+     */
+    public AssistantResult askWithMemoryAndRag(String userMessage, String conversationId) {
+        return chatClientWithMemoryAndRag.prompt()
                 .system(SYSTEM_PROMPT)
                 .user(userMessage)
                 .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
